@@ -1,0 +1,136 @@
+{% extends "base_min.html" %}
+{% block title %}Functions – ElDiff{% endblock %}
+
+{% block extra_css %}
+  <link href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css" rel="stylesheet">
+  <style>
+    .table-controls {
+      display: flex;
+      align-items: center;
+      margin-bottom: .75rem;
+      padding: 0 .25rem;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h2 class="h5 mb-1 text-primary fw-bold mt-2">Functions</h2>
+  <p id="binaryInfoSubtitle" class="mb-3 text-muted"></p>
+
+  <table id="functionTable" class="data-table table table-hover table-bordered w-100">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Old Name</th>
+        <th>Old Address</th>
+        <th>New Name</th>
+        <th>New Address</th>
+        <th>Similarity</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
+  <script>
+  $(function(){
+    const p = new URLSearchParams(window.location.search);
+    const name = p.get("binary_name"),
+          ver  = p.get("binary_version"),
+          old  = p.get("old_version");
+    if(!name||!ver) return alert("Missing binary_name or binary_version");
+
+    $("#binaryInfoSubtitle").text(
+      old ? `${name} v${old} → v${ver}` : `${name} (v${ver})`
+    );
+
+    const table = $('#functionTable').DataTable({
+      ...baseDataTableConfig,
+      ajax: {
+        url: `/get_all_functions?binary_name=${encodeURIComponent(name)}&binary_version=${encodeURIComponent(ver)}`,
+        dataSrc: 'functions'
+      },
+      columns: [
+        {
+          data: 'type',
+          render: t => `<span class="badge ${
+            t==='added'    ? 'bg-success'  :
+            t==='deleted'  ? 'bg-danger'   :
+            t==='imported' ? 'bg-warning text-dark' :
+            t==='patched'  ? 'bg-primary'  :
+                             'bg-secondary'
+          }">${t}</span>`
+        },
+        { data: 'name1' },
+        { data: 'address1', render: a => a ? toHex(a) : '' },
+        { data: 'name2' },
+        { data: 'address2', render: a => a ? toHex(a) : '' },
+        {
+          data: 'similarity',
+          className: 'text-center',
+          render: v => v != null ? v.toFixed(2) : 'N/A'
+        },
+        {
+          data: null,
+          orderable: false,
+          className: 'text-center',
+          render: (_, __, row) => `
+            <button class="btn btn-sm btn-outline-primary view-btn"
+                    data-id="${row.ID}"
+                    data-type="${row.type}">
+              View
+            </button>`
+        }
+      ],
+      order: [[5,'desc']],
+    });
+
+    $('#functionTable').on('click', '.view-btn', function(){
+      const id = $(this).data('id');
+      const type = $(this).data('type');
+
+      if(type === 'patched') {
+        fetch(`/get_diff/${id}`)
+          .then(r=>r.json())
+          .then(res=>{
+            if(!res.success) return alert(res.error||'Failed to load diff');
+            const html = Diff2Html.html(res.diff, {
+              drawFileList: false,
+              matching: 'lines',
+              outputFormat: 'side-by-side'
+            });
+            $('#diffContainer').html(html);
+            new bootstrap.Modal($('#diffModal')).show();
+          })
+          .catch(()=>alert('Error loading diff'));
+      } else {
+        fetch(`/get_func_blob/${id}`)
+          .then(r=>r.json())
+          .then(res=>{
+            if(!res.success) return alert(res.error||'No code available');
+            const el = document.getElementById("codeContainer");
+            el.textContent = res.code;
+            el.removeAttribute('data-highlighted');
+            el.classList.remove('hljs');
+            delete el.dataset.highlighted;
+
+            try { hljs.highlightElement(el); } catch (e) { console.warn('Highlight.js error:', e); }
+
+            document.querySelector('#codeModal .modal-title').textContent =
+              (type === 'added' ? 'Added' : 'Deleted') + ' Function Code';
+            new bootstrap.Modal(document.getElementById('codeModal')).show();
+          })
+          .catch(()=>alert('Error loading code'));
+      }
+    });
+
+    function toHex(v){
+      const n = Number(v);
+      return isNaN(n) ? v : '0x'+n.toString(16).toUpperCase();
+    }
+  });
+  </script>
+{% endblock %}

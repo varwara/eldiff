@@ -1,0 +1,98 @@
+{% extends "base_min.html" %}
+
+{% block title %}Report for {{ kb_date }} – ElDiff{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Patch Report for {{ kb_date }}</h2>
+
+<!-- Top 10 CWE Table -->
+<h4 class="mt-4">Top 10 CWE</h4>
+<table class="table table-bordered table-sm">
+  <thead class="table-light">
+    <tr>
+      <th style="width: 80%">CWE</th>
+      <th style="width: 20%">Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in cwes %}
+      <tr>
+        <td>{{ row.CWE }}</td>
+        <td>{{ row.cnt }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- High-Risk CVEs -->
+<h4 class="mt-5">High-Risk CVE</h4>
+<table class="table table-bordered table-sm">
+    <tr>
+        <th>CVE</th>
+        <th>CWE</th>
+        <th>Severity</th>
+        <th>Publicly Disclosed</th>
+        <th>Exploited</th>
+        <th>Component</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in high_risk %}
+      <tr>
+          <td>{{v.CVE}}</td>
+          <td>{{v.CWE}}</td>
+          <td>{{v.Severity}}</td>
+          <td>{{v.publicly_disclosed}}</td>
+          <td>{{v.exploited}}</td>
+          <td>{{v.component}}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h4 class="mt-5">Known Component → Binary → CVE</h4>
+<table class="table table-bordered table-sm">
+  <thead class="table-light">
+    <tr>
+      <th>Component</th>
+      <th>Binary</th>
+      <th>CVE</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in comp_bin_cves %}
+      <tr>
+        <td>{{ row.component }}</td>
+        <td>{{ row.binary_name }}</td>
+        <td>{{row.cves}}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Binary Function Diffs -->
+<h4 class="mt-5">Binary Functions</h4>
+<table class="table table-bordered table-sm">
+  <thead class="table-light">
+    <tr>
+      <th>Binary Name</th>
+      <th>Version</th>
+      <th>Total Patched</th>
+      <th>Added</th>
+      <th>Deleted</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in funcs %}
+      <tr>
+        <td>{{ f.binary_name }}</td>
+        <td>{{ f.binary_version }}</td>
+        <td>{{ f.total_functions }}</td>
+        <td class="text-success fw-semibold">{{ f.added_functions }}</td>
+        <td class="text-danger fw-semibold">{{ f.deleted_functions }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+

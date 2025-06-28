@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}ElDiff{% endblock %}</title>
+
+  <!-- Highlight.js styles -->
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"
+    rel="stylesheet" />
+
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet" />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+  <!-- DataTables CSS -->
+  <link
+    href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"
+    rel="stylesheet" />
+
+  <!-- Code font -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/jetbrains-mono@1.0.6/css/jetbrains-mono.min.css"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Source+Code+Pro&display=swap"
+    rel="stylesheet"/>
+
+  <style>
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .data-table thead th {
+      font-weight: 600 !important;
+      font-size: 0.85em;
+      background-color: #f8f9fa;
+    }
+
+    .data-table tbody tr:hover {
+      background-color: rgba(13, 110, 253, 0.05);
+    }
+
+    /* DataTables default search box on the right */
+    div.dataTables_wrapper div.dataTables_filter {
+      text-align: right;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Length selector on the left */
+    div.dataTables_wrapper div.dataTables_length {
+      margin-bottom: 0.5rem;
+    }
+
+    /* Center table content */
+    .data-table td,
+    .data-table th {
+      vertical-align: middle;
+      padding: 0.5rem 0.8rem;
+      font-variant-ligatures: none;
+      font-size: 0.85em;
+      text-align: center;
+    }
+
+    /* unified added/deleted row background & hover */
+    .added-row, .added-row td {
+      background-color: #e6ffec !important;
+    }
+    .deleted-row, .deleted-row td {
+      background-color: #ffebe9 !important;
+    }
+    .added-row:hover, .added-row:hover td {
+      background-color: #d1ffde !important;
+    }
+    .deleted-row:hover, .deleted-row:hover td {
+      background-color: #ffd7d3 !important;
+    }
+  </style>
+
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  {% include 'navbar.html' %}
+
+  <main class="container my-3 flex-grow-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Highlight.js core -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- line-numbers plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.8.0/dist/highlightjs-line-numbers.min.js"></script>
+  <script>
+    // Highlight all static code blocks and add line numbers on load
+    hljs.highlightAll();
+    hljs.initLineNumbersOnLoad();
+  </script>
+
+  <!-- Bootstrap Bundle JS (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+
+  <!-- DataTables JS -->
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+  <script>
+    const baseDataTableConfig = {
+      autoWidth: true,
+      pagingType: 'simple_numbers',
+      pageLength: 10,
+      lengthMenu: [
+        [10, 15, 25, 50, -1],
+        [10, 15, 25, 50, 'All']
+      ],
+      language: {
+        search: "_INPUT_",
+        searchPlaceholder: "Search...",
+        lengthMenu: "Show _MENU_ entries",
+        info: "_START_–_END_ of _TOTAL_ entries",
+        paginate: { previous: '‹', next: '›' }
+      },
+      layout: {
+        top: {
+          left: 'length',
+          center: '',
+          left: 'search'
+        },
+        middle: 'table',
+        bottom: {
+          left: 'info',
+          center: '',
+          right: 'pagination'
+        }
+      }
+    };
+  </script>
+
+  {% block scripts %}{% endblock %}
+
+  <!-- Diff Modal -->
+  <div class="modal fade" id="diffModal" tabindex="-1" aria-labelledby="diffModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="diffModalLabel">Diff</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="diffContainer" class="diff-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Modal -->
+  <div class="modal fade" id="codeModal" tabindex="-1" aria-labelledby="codeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="codeModalLabel">Pseudocode</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-0">
+          <pre class="m-0"><code id="codeContainer" class="language-cpp"></code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+    <script>
+        $('#codeModal').on('shown.bs.modal', function () {
+            const codeEl = document.getElementById('codeContainer');
+
+            // remove old gutters
+            codeEl.parentElement
+                .querySelectorAll('.line-numbers-rows')
+                .forEach(el => el.remove());
+
+            // clear the "already highlighted" flag
+            codeEl.removeAttribute('data-highlighted');
+
+            // re-highlight & add line numbers
+            hljs.highlightElement(codeEl);
+            hljs.lineNumbersBlock(codeEl);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+{% extends "base_min.html" %}
+{% block title %}Vulnerabilities - ElDiff{% endblock %}
+
+{% block extra_css %}
+{# <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"> #}
+{# <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"> #}
+<style>
+  .component-link {
+    color: #0d6efd;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .component-text {
+    color: inherit;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3 mt-2">
+  <h2 class="h5 mb-0 text-primary fw-bold">Update</h2>
+  <select id="kbDateSelect" class="form-select form-select-sm mt-2">
+    <option value="">-- Choose Update --</option>
+  </select>
+</div>
+
+<div class="table-container">
+  <table id="vulnerabilitiesTable" class="data-table table table-hover table-bordered w-100">
+    <thead>
+      <tr>
+        <th>CVE</th>
+        <th>CWE</th>
+        <th>Component</th>
+        <th>Impact</th>
+        <th>Severity</th>
+        <th>Exploit Status</th>
+        <th>Info</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detailsModalLabel">Vulnerability Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalFAQ" class="mt-1 mb-3"></div>
+        <div><strong>Fix URL:</strong> <a href="#" id="modalFixURL" target="_blank">—</a></div>
+        <div><strong>Fix Build:</strong> <span id="modalFixBuild">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+const componentMapping = {};
+
+async function loadComponentMapping() {
+  try {
+    const res = await fetch('/get_component_mappings');
+    if (!res.ok) throw new Error('Bad response');
+    (await res.json()).forEach(item => {
+      componentMapping[item.component] = item.binary_name;
+    });
+  } catch (e) {
+    console.error('Component mapping load failed:', e);
+  }
+}
+
+function goToFunctions(name, version) {
+  window.location.href = `/functions?binary_name=${encodeURIComponent(name)}&binary_version=${encodeURIComponent(version)}`;
+}
+
+async function onComponentClick(component, kbDate) {
+  try {
+    const res = await fetch(`/get_binaries_for_component?component=${encodeURIComponent(component)}&kb_date=${encodeURIComponent(kbDate)}`);
+    if (!res.ok) throw new Error('Bad response');
+    const bins = await res.json();
+    if (!bins.length) return alert('No binaries found');
+    if (bins.length === 1) {
+      goToFunctions(bins[0].binary_name, bins[0].binary_version);
+    } else {
+      const label = document.getElementById('binaryModalLabel');
+      const list = document.getElementById('binaryList');
+      label.textContent = component;
+      list.innerHTML = '';
+      bins.forEach(b => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-action';
+        li.textContent = b.binary_name;
+        li.onclick = () => goToFunctions(b.binary_name, b.binary_version);
+        list.appendChild(li);
+      });
+
+      // 🛠 FIX: Clear previous backdrop and modals
+      $('.modal-backdrop').remove();
+      $('.modal').modal('hide');
+
+      new bootstrap.Modal(document.getElementById('binaryModal')).show();
+    }
+  } catch (e) {
+    alert('Failed to fetch binaries for component');
+    console.error(e);
+  }
+}
+
+$(document).ready(function() {
+  let dataTable = null;
+
+  async function fetchData(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (e) {
+      console.error('Fetch error:', e);
+      return null;
+    }
+  }
+
+  async function initializeKbDates() {
+    const data = await fetchData('/get_updates');
+    if (!data) return;
+    const sel = $('#kbDateSelect').empty().append('<option value="">-- Choose Update --</option>');
+    data.forEach(u => sel.append(new Option(u.KbDate, u.KbDate)));
+    if (data.length) sel.val(data[0].KbDate).trigger('change');
+  }
+
+  async function initializeDataTable(kbDate) {
+    const data = await fetchData(`/get_vulnerabilities/${kbDate}`);
+    if (!data) return;
+
+    if (dataTable) dataTable.destroy();
+    $('#vulnerabilitiesTable tbody').empty();
+
+    dataTable = $('#vulnerabilitiesTable').DataTable({
+      data,
+      columns: [
+        { data: 'CVE', className: 'dt-center', width: '10%' },
+        { data: 'CWE', className: 'dt-center' },
+        {
+          data: 'Component',
+          className: 'dt-center',
+          render: (comp) => {
+            if (componentMapping[comp]) {
+              return `<a href="javascript:void(0)" class="component-link"
+                         onclick="onComponentClick('${comp}', '${kbDate}')"
+                         title="${componentMapping[comp]}">${comp}</a>`;
+            }
+            return `<span class="component-text">${comp}</span>`;
+          }
+        },
+        { data: 'Impact', className: 'dt-center' },
+        {
+          data: 'Severity',
+          className: 'dt-center',
+          render: s => {
+            const cls = s.toLowerCase() === 'critical' ? 'bg-danger'
+                      : s.toLowerCase() === 'high' ? 'bg-warning text-dark'
+                      : 'bg-secondary';
+            return `<span class="badge ${cls}">${s}</span>`;
+          }
+        },
+        {
+          data: null,
+          className: 'dt-center',
+          render: r => `Public: ${r.Exploit_Status["Publicly Disclosed"]}<br>Exploited: ${r.Exploit_Status["Exploited"]}`
+        },
+        {
+          data: null,
+          className: 'dt-center',
+          orderable: false,
+          render: (r, t, full) => `
+            <button class="btn btn-sm btn-outline-primary view-details" data-cve="${r.CVE}">
+              <i class="bi bi-info-circle"></i>
+            </button>`
+        }
+      ]
+    });
+
+    $('#vulnerabilitiesTable tbody').on('dblclick', 'tr', function(e) {
+        if ($(e.target).closest('.view-details').length) return;
+        window.location.href = `/binaries?kb_date=${kbDate}`;
+    });
+
+    $('#vulnerabilitiesTable tbody').on('click', '.view-details', function() {
+      const row = dataTable.row($(this).closest('tr')).data();
+
+      // 🛠 FIX: Prevent multiple backdrop stacking
+      $('.modal-backdrop').remove();
+      $('.modal').modal('hide');
+
+      $('#detailsModalLabel').text(`${row.CVE}`);
+      $('#modalFAQ').html(row.FAQ || '—');
+      $('#modalFixURL').attr('href', row.FixURL || '#').text(row.FixURL || '—');
+      $('#modalFixBuild').text(row.FixedBuild || '—');
+      new bootstrap.Modal(document.getElementById('detailsModal')).show();
+    });
+  }
+
+  loadComponentMapping();
+  initializeKbDates();
+
+  $('#kbDateSelect').on('change', function() {
+    const val = $(this).val();
+    if (val) initializeDataTable(val);
+  });
+});
+</script>
+{% endblock %}

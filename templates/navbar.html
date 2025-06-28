@@ -1,0 +1,152 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+  <div class="container">
+    <!-- Logo on Left -->
+    <div class="navbar-logo-text me-3">
+      <span class="fw-bold text-primary">El Diff</span>
+      <small class="d-block text-muted" style="font-size: 0.65rem; letter-spacing: 0.5px;">
+         (v0.1)
+      </small>
+    </div>
+
+    <!-- Mobile Menu Toggle -->
+    <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <!-- Navigation Items -->
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav mx-auto">
+        <li class="nav-item">
+          <a class="nav-link active" href="/">Home</a>
+        </li>
+
+        <!-- Report Dropdown -->
+        <li class="nav-item dropdown">
+          <a
+            class="nav-link dropdown-toggle"
+            href="#"
+            id="reportDropdownToggle"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false">
+            Report
+          </a>
+          <ul
+            class="dropdown-menu"
+            aria-labelledby="reportDropdownToggle"
+            id="reportDropdown">
+            <li><span class="dropdown-item-text">Loading…</span></li>
+          </ul>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link" href="/documentation">Documentation</a>
+        </li>
+      </ul>
+
+      <!-- Right-side Contact Info -->
+      <div class="contact-info">
+        <span class="d-none d-md-inline">Author:</span>
+        <a href="mailto:github.com/varwara" class="text-decoration-none">github.com/varwara</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<style>
+.navbar, .nav-link, .dropdown-menu {
+  font-family: 'JetBrains Mono', monospace;
+}
+  .navbar {
+    position: relative;
+    z-index: 1000;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #e9ecef;
+  }
+  .navbar-logo-text {
+    line-height: 1.1;
+    padding: 0.25rem 0;
+    margin-right: 2rem;
+  }
+  .navbar-logo-text .fw-bold {
+    font-size: 1.6rem;
+    letter-spacing: -0.5px;
+    color: #0d6efd !important;
+  }
+  .nav-link {
+    color: #495057 !important;
+    font-weight: 500;
+    padding: 0.5rem 1.2rem !important;
+    transition: all 0.2s ease;
+  }
+  .nav-link.active {
+    color: #0d6efd !important;
+    font-weight: 600;
+    position: relative;
+  }
+  .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 2px;
+    background: #0d6efd;
+  }
+  .dropdown-menu {
+    border: 1px solid rgba(0,0,0,.1);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+    z-index: 1100;
+  }
+  .contact-info {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-left: 1.5rem;
+  }
+  @media (max-width: 992px) {
+    .navbar-logo-text { margin-right: 1rem; }
+    .navbar-logo-text .fw-bold { font-size: 1.4rem; }
+    .contact-info {
+      margin: 1rem 0;
+      text-align: center;
+    }
+    .dropdown-menu {
+      border: none;
+      box-shadow: none;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const dropdown = document.getElementById('reportDropdown');
+    try {
+      const res = await fetch('/get_updates');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updates = await res.json();
+
+      dropdown.innerHTML = '';
+      if (updates.length === 0) {
+        dropdown.innerHTML = '<li><span class="dropdown-item-text">No updates</span></li>';
+        return;
+      }
+
+      updates.forEach(u => {
+        const li = document.createElement('li');
+        const a  = document.createElement('a');
+        a.className = 'dropdown-item';
+        a.href      = `/report/${encodeURIComponent(u.KbDate)}`;
+        a.textContent = u.KbDate;
+        li.appendChild(a);
+        dropdown.appendChild(li);
+      });
+    } catch (err) {
+      console.error('Failed to load report dates:', err);
+      dropdown.innerHTML = '<li><span class="dropdown-item-text text-danger">Error loading dates</span></li>';
+    }
+  });
+</script>
+
+<!-- Use the Bootstrap bundle (includes Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

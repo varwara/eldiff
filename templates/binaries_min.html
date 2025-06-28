@@ -1,0 +1,226 @@
+{% extends "base_min.html" %}
+{% block title %}Binaries – ElDiff{% endblock %}
+
+{% block extra_css %}
+  <link href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css" rel="stylesheet">
+  <style>
+    .table-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 0;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h2 class="h5 mb-3 text-primary fw-bold mt-2">Patched Binaries</h2>
+  <p id="kbInfoSubtitle" class="mb-3 text-muted"></p>
+
+  <table id="binariesTable" class="data-table table table-hover table-bordered w-100">
+    <thead>
+      <tr><th>Binary Name</th><th>Version</th><th>KB</th><th>Hash</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <ul class="nav nav-tabs mt-4" id="binaryTabs" role="tablist"></ul>
+  <div class="tab-content" id="binaryTabsContent"></div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
+  <script>
+  $(function () {
+    const functionsCache = {};
+    const functionTables = {};
+    const tabCounts = {};
+
+    const params = new URLSearchParams(window.location.search);
+    const kbDate = params.get('kb_date'), kb = params.get('kb');
+    if (kbDate) $('#kbInfoSubtitle').text(kb ? `${kbDate} (${kb})` : kbDate);
+
+    const binariesTable = $('#binariesTable').DataTable({
+      ajax: { url: `/get_binaries?kb_date=${kbDate}`, dataSrc: '' },
+      columns: [
+        { data: 'binary_name' },
+        { data: 'binary_version' },
+        { data: 'KB' },
+        { data: 'binary_hash' },
+        {
+          data: 'status',
+          className: 'text-center',
+          render: s => s === 1
+            ? '<i class="bi bi-check-circle-fill text-success"></i> Processed'
+            : '<i class="bi bi-x-circle-fill text-danger"></i> N/A'
+        },
+        {
+          data: null,
+          orderable: false,
+          className: 'text-center',
+          render: (_, r) => `
+            <button class="btn btn-sm btn-outline-primary analyze-btn" ${r.status === 1 ? 'disabled' : ''} >
+             View 
+            </button>`
+        }
+      ]
+    });
+
+    $('#binariesTable tbody').on('click', '.analyze-btn', e => {
+      const d = binariesTable.row($(e.target).closest('tr')).data();
+      if (d) addOrActivateTab(d.binary_name, d.old_version, d.binary_version);
+    });
+
+    function addOrActivateTab(name, oldV, newV) {
+      const key = `${name}-${oldV || 'none'}-${newV}`.replace(/[^\w-]/g, '_');
+      const tabId = `tab-${key}`, paneId = `pane-${key}`, cacheKey = `${name}-${oldV || ''}-${newV}`;
+
+      if ($(`#${tabId}-link`).length) {
+        if (tabCounts[cacheKey]) updateTabBadges(tabId, tabCounts[cacheKey]);
+        return $(`#${tabId}-link`).tab('show');
+      }
+
+      $('#binaryTabs').append(`
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="${tabId}-link" data-bs-toggle="tab" data-bs-target="#${paneId}" title="${oldV ? `v${oldV} → v${newV}` : `v${newV}`}" type="button" role="tab">
+            ${name}
+            <span class="tab-badges" id="${tabId}-badges"></span>
+            <span class="ms-auto text-danger close-tab" style="cursor:pointer">&times;</span>
+          </button>
+        </li>
+      `);
+
+      $('#binaryTabsContent').append(`
+        <div class="tab-pane fade p-3" id="${paneId}" role="tabpanel">
+          <div class="table-controls">
+            <div class="dataTables_filter" id="search-${key}"></div>
+          </div>
+          <table id="funcs-${key}" class="data-table table table-hover table-bordered w-100">
+            <thead><tr><th>Type</th><th>Old Name</th><th>Old Addr</th><th>New Name</th><th>New Addr</th><th>Similarity</th><th>Action</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      `);
+
+      $(`#${tabId}-link`).tab('show');
+
+      if (functionsCache[cacheKey]) {
+        initFunctionsTable(key, functionsCache[cacheKey]);
+        updateTabBadges(tabId, tabCounts[cacheKey]);
+      } else {
+        fetch(`/get_all_functions?binary_name=${encodeURIComponent(name)}&binary_version=${encodeURIComponent(newV)}`)
+          .then(r => r.json())
+          .then(data => {
+            functionsCache[cacheKey] = data;
+            tabCounts[cacheKey] = { patched: data.patched, added: data.added, deleted: data.deleted };
+            initFunctionsTable(key, data);
+            updateTabBadges(tabId, tabCounts[cacheKey]);
+          })
+          .catch(() => alert('Failed to load functions'));
+      }
+    }
+
+    function updateTabBadges(tabId, counts) {
+      $(`#${tabId}-badges`).html(
+        `<span class="badge bg-primary">${counts.patched}</span>` +
+        `<span class="badge bg-success ms-1">${counts.added}</span>` +
+        `<span class="badge bg-danger ms-1">${counts.deleted}</span>`
+      );
+    }
+
+    function initFunctionsTable(key, data) {
+      const sel = `#funcs-${key}`;
+      const dt = $(sel).DataTable({
+        data: data.functions,
+        columns: [
+          { data: 'type', render: t => `<span class="badge ${t === 'patched' ? 'bg-primary' : t === 'added' ? 'bg-success' : 'bg-danger'}">${t}</span>` },
+          { data: 'name1' },
+          { data: 'address1' },
+          { data: 'name2' },
+          { data: 'address2' },
+          { data: 'similarity', render: v => v != null ? v.toFixed(2) : 'N/A' },
+          {
+            data: null,
+            orderable: false,
+            className: 'text-center',
+            render: (_, __, row) => `
+              <button class="btn btn-sm btn-outline-primary view-btn"
+                      data-id="${row.ID}"
+                      data-type="${row.type}">
+                View
+              </button>`
+          }
+        ]
+      });
+
+      functionTables[key] = dt;
+
+      $(sel).on('click', '.view-btn', function(){
+        const id   = $(this).data('id');
+        const type = $(this).data('type');
+
+        if (type === 'patched') openDiffModal(id);
+        else openCodeModal(id, type);
+      });
+    }
+
+    $('#binaryTabs').on('click', '.close-tab', function (e) {
+      e.stopPropagation();
+      const btn = $(this).closest('button');
+      const pane = btn.attr('data-bs-target');
+      const li = btn.closest('li');
+      const key = pane.replace('#pane-', '');
+      if (btn.hasClass('active')) {
+        let tgt = li.prev().find('button[data-bs-toggle=tab]');
+        if (!tgt.length) tgt = li.next().find('button[data-bs-toggle=tab]');
+        tgt.length && tgt.tab('show');
+      }
+      if (functionTables[key]) {
+        functionTables[key].destroy();
+        delete functionTables[key];
+      }
+      delete functionsCache[key];
+      delete tabCounts[key];
+      li.remove();
+      $(pane).remove();
+    });
+
+    function openDiffModal(id) {
+      fetch(`/get_diff/${id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            $('#diffContainer').html(Diff2Html.html(d.diff, {
+              drawFileList: false,
+              matching: 'lines',
+              outputFormat: 'side-by-side'
+            }));
+            new bootstrap.Modal($('#diffModal')).show();
+          } else alert(d.error || 'Failed');
+        })
+        .catch(() => alert('Error'));
+    }
+
+    function openCodeModal(id, type) {
+      const el = document.getElementById("codeContainer");
+      el.textContent = '';
+      el.removeAttribute('data-highlighted');
+      el.classList.remove('hljs');
+      delete el.dataset.highlighted;
+
+      fetch(`/get_func_blob/${id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (!d.success) return alert(d.error || 'Failed');
+          el.textContent = d.code;
+          try { hljs.highlightElement(el); } catch (e) {}
+          document.querySelector('#codeModal .modal-title').textContent =
+            (type === 'added' ? 'Added' : 'Deleted') + ' Function Code';
+          new bootstrap.Modal(document.getElementById('codeModal')).show();
+        })
+        .catch(() => alert('Error loading code'));
+    }
+  });
+  </script>
+{% endblock %}
