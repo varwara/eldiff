@@ -2,6 +2,8 @@
 
 **El Diff** is a lightweight web interface for rapidly analyzing Microsoft Patch Tuesday updates at the binary and function pseudocode level. The database includes data for Windows 11 22H2/23H2. Vulnerability information is available for the entire lifecycle of this OS version, while binary-level data is partially available from December 2024 to June 2025. You can also use the database to build your own applications with global search and other features that are not included in this version. El Diff was created for anyone interested in patch diffing and looking to save time by skipping the manual binary analysis step and diving directly into the patches. The large binary database also helps you learn what real Microsoft patches look like.
 
+**The story about how the database were collected - Microsoft quirks and other stuff will be published soon here**. Also you can find me on ![X](https://x.com/varwar1337).
+
 ---
 
 ## Features
@@ -80,7 +82,7 @@ Click the **View** button to open the diff modal.
 
 ### 6. Mapping
 
-- Partial mapping is implemented between vulnerabilities and binaries, allowing fast navigation from the CVE list to the vulnerable binary and its functions.
+- Partial mapping is implemented between vulnerabilities and binaries, allowing fast navigation from the CVE list to the patched binary and its functions.
 
 ![7.png](./doc/7.png)
 
@@ -88,7 +90,7 @@ Click the **View** button to open the diff modal.
 
 ## Simple Reports
 
-- Update reports include 4 statistical tables:
+- Update reports include 4 statistical tables
     - TOP-10 CWE's
     - High-Risk CVE's
     - Known Component → Binary → CVE mappings
